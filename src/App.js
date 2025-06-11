@@ -30,7 +30,7 @@ const ScheduleApp = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // 실시간 Firebase 리스너
+  // 🔥 실시간 Firebase 리스너
   useEffect(() => {
     const schedulesRef = ref(database, 'schedules');
     
@@ -58,7 +58,7 @@ const ScheduleApp = () => {
     };
   }, []);
 
-  // Firebase에 즉시 저장
+  // 🔥 Firebase에 즉시 저장
   const saveToFirebase = async (newData) => {
     try {
       const schedulesRef = ref(database, 'schedules');
@@ -885,7 +885,7 @@ const ScheduleApp = () => {
         }
 
         .date-cell.selected {
-          background: #8b7dd8 !important;
+          background: #4facfe !important;
           color: white;
           font-weight: bold;
         }
@@ -901,8 +901,8 @@ const ScheduleApp = () => {
         }
 
         .date-cell.drag-preview {
-          background: rgba(139, 125, 216, 0.3) !important;
-          border: 2px dashed #8b7dd8 !important;
+          background: rgba(79, 172, 254, 0.3) !important;
+          border: 2px dashed #4facfe !important;
         }
 
         .date-number {
