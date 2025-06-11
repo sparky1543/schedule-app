@@ -885,7 +885,7 @@ const ScheduleApp = () => {
         }
 
         .date-cell.selected {
-          background: #8e44ad !important;
+          background: #9b59b6 !important;
           color: white;
           font-weight: bold;
         }
@@ -901,8 +901,8 @@ const ScheduleApp = () => {
         }
 
         .date-cell.drag-preview {
-          background: rgba(142, 68, 173, 0.3) !important;
-          border: 2px dashed #8e44ad !important;
+          background: rgba(155, 89, 182, 0.3) !important;
+          border: 2px dashed #9b59b6 !important;
         }
 
         .date-number {
