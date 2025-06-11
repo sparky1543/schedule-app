@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set } from 'firebase/database';
 
-// Firebase 설정
+// 🔥 여러분의 Firebase 설정을 여기에 넣으세요!
 const firebaseConfig = {
   apiKey: "AIzaSyAJR4DKer4gLCUsxEGk4guqhW8Biv3u5BY",
   authDomain: "schedule-app-d4a72.firebaseapp.com",
-  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/",
+  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/", // ⚠️ 이 부분을 추가해주세요!
   projectId: "schedule-app-d4a72",
   storageBucket: "schedule-app-d4a72.firebasestorage.app",
   messagingSenderId: "295551868282",
@@ -29,18 +29,18 @@ const ScheduleApp = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [dragStartTime, setDragStartTime] = useState(null);
+  const [mouseDownPosition, setMouseDownPosition] = useState(null);
 
   // 🔥 실시간 Firebase 리스너
   useEffect(() => {
     // 페이지 제목 설정
-    document.title = '📅 일정 조율';
+    document.title = '일정 조율';
     
     // 파비콘 설정
     const link = document.querySelector("link[rel~='icon']") || document.createElement('link');
     link.type = 'image/svg+xml';
     link.rel = 'icon';
-    link.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>";
+    link.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏝️</text></svg>";
     document.getElementsByTagName('head')[0].appendChild(link);
     
     const schedulesRef = ref(database, 'schedules');
@@ -174,114 +174,141 @@ const ScheduleApp = () => {
     }
   };
 
-  // 터치/드래그 시작 (모바일 + 데스크톱 지원)
-  const handleStart = (date, event) => {
+  // 마우스/터치 다운
+  const handleMouseDown = (date, event) => {
     if (!isValidDate(date)) return;
     
-    const currentTime = Date.now();
-    setDragStartTime(currentTime);
-    
-    // 터치 이벤트만 preventDefault
-    if (event && event.type === 'touchstart') {
+    if (event.type === 'touchstart') {
       event.preventDefault();
     }
     
-    setIsDragging(true);
+    setMouseDownPosition({ x: event.clientX || event.touches[0].clientX, y: event.clientY || event.touches[0].clientY });
     setDragStart(date);
     setDragEnd(date);
+    setIsDragging(false); // 일단 false로 시작
   };
 
-  // 터치/드래그 중 (모바일 + 데스크톱 지원)
-  const handleMove = (date, event) => {
-    if (!isDragging || !isValidDate(date)) return;
+  // 마우스/터치 무브
+  const handleMouseMove = (date, event) => {
+    if (!dragStart || !isValidDate(date)) return;
     
-    // 터치 이벤트만 preventDefault
-    if (event && event.type === 'touchmove') {
+    if (event.type === 'touchmove') {
       event.preventDefault();
+    }
+    
+    const currentPos = { x: event.clientX || event.touches[0].clientX, y: event.clientY || event.touches[0].clientY };
+    const distance = Math.sqrt(
+      Math.pow(currentPos.x - (mouseDownPosition?.x || 0), 2) + 
+      Math.pow(currentPos.y - (mouseDownPosition?.y || 0), 2)
+    );
+    
+    // 5픽셀 이상 움직이면 드래그로 판단
+    if (distance > 5) {
+      setIsDragging(true);
     }
     
     setDragEnd(date);
   };
 
-  // 터치/드래그 끝 (모바일 + 데스크톱 지원)
-  const handleEnd = (event) => {
-    if (!isDragging) return;
-
-    const endTime = Date.now();
-    const timeDiff = endTime - (dragStartTime || 0);
-    const isQuickClick = timeDiff < 200; // 200ms 이하는 클릭으로 판단
-
-    // 터치 이벤트만 preventDefault
+  // 마우스/터치 업
+  const handleMouseUp = (event) => {
+    if (!dragStart) return;
+    
     if (event && event.type === 'touchend') {
       event.preventDefault();
     }
-
-    // 빠른 클릭이고 시작점과 끝점이 같으면 단일 클릭으로 처리
-    if (isQuickClick && dragStart === dragEnd) {
-      const newSelectedSlots = new Set(selectedSlots);
-      if (newSelectedSlots.has(dragStart)) {
-        newSelectedSlots.delete(dragStart);
-      } else {
-        newSelectedSlots.add(dragStart);
-      }
-      setSelectedSlots(newSelectedSlots);
-    } else if (dragStart && dragEnd && dragStart !== dragEnd) {
-      // 실제 드래그 (시작점과 끝점이 다름)
-      const rangeDates = getDateRange(dragStart, dragEnd);
-      const newSelectedSlots = new Set(selectedSlots);
-      
-      const shouldSelect = !selectedSlots.has(dragStart);
-      
-      rangeDates.forEach(date => {
-        if (shouldSelect) {
-          newSelectedSlots.add(date);
+    
+    if (!isDragging) {
+      // 클릭으로 판단 - 단일 날짜 토글
+      setSelectedSlots(prev => {
+        const newSlots = new Set(prev);
+        if (newSlots.has(dragStart)) {
+          newSlots.delete(dragStart);
         } else {
-          newSelectedSlots.delete(date);
+          newSlots.add(dragStart);
         }
+        return newSlots;
       });
-      
-      setSelectedSlots(newSelectedSlots);
+    } else if (dragEnd) {
+      // 드래그로 판단 - 범위 선택
+      const rangeDates = getDateRange(dragStart, dragEnd);
+      setSelectedSlots(prev => {
+        const newSlots = new Set(prev);
+        const shouldSelect = !prev.has(dragStart);
+        
+        rangeDates.forEach(date => {
+          if (shouldSelect) {
+            newSlots.add(date);
+          } else {
+            newSlots.delete(date);
+          }
+        });
+        return newSlots;
+      });
     }
     
+    // 리셋
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
-    setDragStartTime(null);
+    setMouseDownPosition(null);
   };
 
-  // 웹 전용 클릭 핸들러 (독립적)
-  const handleDateClick = (date, event) => {
-    if (!isValidDate(date)) return;
-    
-    // 드래그 상태와 관계없이 독립적으로 처리
-    const newSelectedSlots = new Set(selectedSlots);
-    if (newSelectedSlots.has(date)) {
-      newSelectedSlots.delete(date);
-    } else {
-      newSelectedSlots.add(date);
-    }
-    setSelectedSlots(newSelectedSlots);
-  };
-
-  // 전역 터치/마우스 업 이벤트 감지
+  // 전역 마우스 업 이벤트 감지
   useEffect(() => {
-    const handleGlobalEnd = (event) => {
-      if (isDragging) {
-        handleEnd(event);
+    const handleGlobalMouseUp = (event) => {
+      if (dragStart) {
+        if (event.type === 'touchend') {
+          event.preventDefault();
+        }
+        
+        if (!isDragging) {
+          // 클릭으로 판단 - 단일 날짜 토글
+          setSelectedSlots(prev => {
+            const newSlots = new Set(prev);
+            if (newSlots.has(dragStart)) {
+              newSlots.delete(dragStart);
+            } else {
+              newSlots.add(dragStart);
+            }
+            return newSlots;
+          });
+        } else if (dragEnd) {
+          // 드래그로 판단 - 범위 선택
+          const rangeDates = getDateRange(dragStart, dragEnd);
+          setSelectedSlots(prev => {
+            const newSlots = new Set(prev);
+            const shouldSelect = !prev.has(dragStart);
+            
+            rangeDates.forEach(date => {
+              if (shouldSelect) {
+                newSlots.add(date);
+              } else {
+                newSlots.delete(date);
+              }
+            });
+            return newSlots;
+          });
+        }
+        
+        // 리셋
+        setIsDragging(false);
+        setDragStart(null);
+        setDragEnd(null);
+        setMouseDownPosition(null);
       }
     };
 
-    if (isDragging) {
-      // 모바일과 데스크톱 모두 지원
-      document.addEventListener('mouseup', handleGlobalEnd);
-      document.addEventListener('touchend', handleGlobalEnd, { passive: false });
+    if (dragStart) {
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('touchend', handleGlobalMouseUp, { passive: false });
     }
 
     return () => {
-      document.removeEventListener('mouseup', handleGlobalEnd);
-      document.removeEventListener('touchend', handleGlobalEnd);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('touchend', handleGlobalMouseUp);
     };
-  }, [isDragging, dragStart, dragEnd, selectedSlots]);
+  }, [dragStart, dragEnd, isDragging]); // selectedSlots 제거
 
   // 이름 입력 시 기존 일정 확인
   useEffect(() => {
@@ -516,10 +543,10 @@ const ScheduleApp = () => {
                       <div
                         key={index}
                         className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'drag-preview' : ''}`}
-                        onMouseDown={(e) => handleStart(date.date, e)}
-                        onMouseEnter={(e) => handleMove(date.date, e)}
-                        onMouseUp={(e) => handleEnd(e)}
-                        onTouchStart={(e) => handleStart(date.date, e)}
+                        onMouseDown={(e) => handleMouseDown(date.date, e)}
+                        onMouseEnter={(e) => handleMouseMove(date.date, e)}
+                        onMouseUp={(e) => handleMouseUp(e)}
+                        onTouchStart={(e) => handleMouseDown(date.date, e)}
                         onTouchMove={(e) => {
                           // 터치 포인트에서 해당하는 엘리먼트 찾기
                           const touch = e.touches[0];
@@ -528,18 +555,11 @@ const ScheduleApp = () => {
                             const cellElement = element.closest('.date-cell');
                             const cellDate = cellElement.getAttribute('data-date');
                             if (cellDate) {
-                              handleMove(cellDate, e);
+                              handleMouseMove(cellDate, e);
                             }
                           }
                         }}
-                        onTouchEnd={(e) => handleEnd(e)}
-                        onClick={(e) => {
-                          // 웹 전용 클릭 (터치 디바이스가 아닐 때만)
-                          if (!('ontouchstart' in window)) {
-                            e.stopPropagation();
-                            handleDateClick(date.date, e);
-                          }
-                        }}
+                        onTouchEnd={(e) => handleMouseUp(e)}
                         data-date={date.date}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
@@ -567,10 +587,10 @@ const ScheduleApp = () => {
                       <div
                         key={index}
                         className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'drag-preview' : ''}`}
-                        onMouseDown={(e) => handleStart(date.date, e)}
-                        onMouseEnter={(e) => handleMove(date.date, e)}
-                        onMouseUp={(e) => handleEnd(e)}
-                        onTouchStart={(e) => handleStart(date.date, e)}
+                        onMouseDown={(e) => handleMouseDown(date.date, e)}
+                        onMouseEnter={(e) => handleMouseMove(date.date, e)}
+                        onMouseUp={(e) => handleMouseUp(e)}
+                        onTouchStart={(e) => handleMouseDown(date.date, e)}
                         onTouchMove={(e) => {
                           // 터치 포인트에서 해당하는 엘리먼트 찾기
                           const touch = e.touches[0];
@@ -579,12 +599,11 @@ const ScheduleApp = () => {
                             const cellElement = element.closest('.date-cell');
                             const cellDate = cellElement.getAttribute('data-date');
                             if (cellDate) {
-                              handleMove(cellDate, e);
+                              handleMouseMove(cellDate, e);
                             }
                           }
                         }}
-                        onTouchEnd={(e) => handleEnd(e)}
-                        onClick={(e) => handleDateClick(date.date, e)}
+                        onTouchEnd={(e) => handleMouseUp(e)}
                         data-date={date.date}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
