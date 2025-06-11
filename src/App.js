@@ -168,7 +168,7 @@ const ScheduleApp = () => {
     if (!isValidDate(date)) return;
     
     // 기본 동작 방지 (스크롤, 선택 등)
-    if (event) {
+    if (event && event.type === 'touchstart') {
       event.preventDefault();
     }
     
@@ -181,7 +181,7 @@ const ScheduleApp = () => {
   const handleMove = (date, event) => {
     if (!isDragging || !isValidDate(date)) return;
     
-    if (event) {
+    if (event && event.type === 'touchmove') {
       event.preventDefault();
     }
     
@@ -192,11 +192,20 @@ const ScheduleApp = () => {
   const handleEnd = (event) => {
     if (!isDragging) return;
 
-    if (event) {
+    if (event && event.type === 'touchend') {
       event.preventDefault();
     }
 
-    if (dragStart && dragEnd) {
+    // 시작점과 끝점이 같으면 단일 클릭/탭으로 처리
+    if (dragStart === dragEnd) {
+      const newSelectedSlots = new Set(selectedSlots);
+      if (newSelectedSlots.has(dragStart)) {
+        newSelectedSlots.delete(dragStart);
+      } else {
+        newSelectedSlots.add(dragStart);
+      }
+      setSelectedSlots(newSelectedSlots);
+    } else if (dragStart && dragEnd) {
       // 드래그 범위의 모든 날짜 선택
       const rangeDates = getDateRange(dragStart, dragEnd);
       const newSelectedSlots = new Set(selectedSlots);
@@ -220,14 +229,15 @@ const ScheduleApp = () => {
     setDragEnd(null);
   };
 
-  // 단일 날짜 클릭/탭
+  // 단일 날짜 클릭/탭 (웹 전용 - 백업용)
   const handleDateClick = (date, event) => {
-    if (!isValidDate(date) || isDragging) return;
+    if (!isValidDate(date)) return;
     
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    // 드래그가 진행 중이면 클릭 무시
+    if (isDragging) return;
+    
+    // 터치 이벤트는 무시 (handleEnd에서 처리)
+    if (event && event.type === 'touchstart') return;
     
     const newSelectedSlots = new Set(selectedSlots);
     if (newSelectedSlots.has(date)) {
