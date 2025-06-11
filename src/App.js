@@ -10,6 +10,27 @@ const ScheduleApp = () => {
   const [dragEnd, setDragEnd] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  // 로컬 스토리지에서 데이터 불러오기
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem('scheduleAppData');
+      if (savedData) {
+        setScheduleData(JSON.parse(savedData));
+      }
+    } catch (error) {
+      console.log('데이터 불러오기 실패:', error);
+    }
+  }, []);
+
+  // 데이터 변경시 로컬 스토리지에 저장
+  useEffect(() => {
+    try {
+      localStorage.setItem('scheduleAppData', JSON.stringify(scheduleData));
+    } catch (error) {
+      console.log('데이터 저장 실패:', error);
+    }
+  }, [scheduleData]);
+
   // 7월 1일부터 8월 31일까지의 날짜 생성 (일요일부터 시작하는 달력 형태)
   const generateDates = () => {
     const dates = [];
@@ -103,24 +124,38 @@ const ScheduleApp = () => {
     }
   };
 
-  // 드래그 시작
-  const handleMouseDown = (date) => {
+  // 터치/드래그 시작 (모바일 + 데스크톱 지원)
+  const handleStart = (date, event) => {
     if (!isValidDate(date)) return;
+    
+    // 기본 동작 방지 (스크롤, 선택 등)
+    if (event) {
+      event.preventDefault();
+    }
     
     setIsDragging(true);
     setDragStart(date);
     setDragEnd(date);
   };
 
-  // 드래그 중
-  const handleMouseEnter = (date) => {
+  // 터치/드래그 중 (모바일 + 데스크톱 지원)
+  const handleMove = (date, event) => {
     if (!isDragging || !isValidDate(date)) return;
+    
+    if (event) {
+      event.preventDefault();
+    }
+    
     setDragEnd(date);
   };
 
-  // 드래그 끝
-  const handleMouseUp = () => {
+  // 터치/드래그 끝 (모바일 + 데스크톱 지원)
+  const handleEnd = (event) => {
     if (!isDragging) return;
+
+    if (event) {
+      event.preventDefault();
+    }
 
     if (dragStart && dragEnd) {
       // 드래그 범위의 모든 날짜 선택
@@ -146,9 +181,14 @@ const ScheduleApp = () => {
     setDragEnd(null);
   };
 
-  // 단일 날짜 클릭
-  const handleDateClick = (date) => {
+  // 단일 날짜 클릭/탭
+  const handleDateClick = (date, event) => {
     if (!isValidDate(date) || isDragging) return;
+    
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     
     const newSelectedSlots = new Set(selectedSlots);
     if (newSelectedSlots.has(date)) {
@@ -159,22 +199,25 @@ const ScheduleApp = () => {
     setSelectedSlots(newSelectedSlots);
   };
 
-  // 전역 마우스 업 이벤트 감지
+  // 전역 터치/마우스 업 이벤트 감지
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleGlobalEnd = (event) => {
       if (isDragging) {
-        handleMouseUp();
+        handleEnd(event);
       }
     };
 
     if (isDragging) {
-      document.addEventListener('mouseup', handleGlobalMouseUp);
+      // 모바일과 데스크톱 모두 지원
+      document.addEventListener('mouseup', handleGlobalEnd);
+      document.addEventListener('touchend', handleGlobalEnd, { passive: false });
     }
 
     return () => {
-      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('mouseup', handleGlobalEnd);
+      document.removeEventListener('touchend', handleGlobalEnd);
     };
-  }, [isDragging]);
+  }, [isDragging, dragStart, dragEnd, selectedSlots]);
 
   // 이름 입력 시 기존 일정 확인
   useEffect(() => {
@@ -353,10 +396,25 @@ const ScheduleApp = () => {
                       <div
                         key={index}
                         className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'drag-preview' : ''}`}
-                        onMouseDown={() => handleMouseDown(date.date)}
-                        onMouseEnter={() => handleMouseEnter(date.date)}
-                        onMouseUp={handleMouseUp}
-                        onClick={() => handleDateClick(date.date)}
+                        onMouseDown={(e) => handleStart(date.date, e)}
+                        onMouseEnter={(e) => handleMove(date.date, e)}
+                        onMouseUp={(e) => handleEnd(e)}
+                        onTouchStart={(e) => handleStart(date.date, e)}
+                        onTouchMove={(e) => {
+                          // 터치 포인트에서 해당하는 엘리먼트 찾기
+                          const touch = e.touches[0];
+                          const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                          if (element && element.closest('.date-cell')) {
+                            const cellElement = element.closest('.date-cell');
+                            const cellDate = cellElement.getAttribute('data-date');
+                            if (cellDate) {
+                              handleMove(cellDate, e);
+                            }
+                          }
+                        }}
+                        onTouchEnd={(e) => handleEnd(e)}
+                        onClick={(e) => handleDateClick(date.date, e)}
+                        data-date={date.date}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
                         <div className="date-number">{date.display}</div>
@@ -383,10 +441,25 @@ const ScheduleApp = () => {
                       <div
                         key={index}
                         className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'drag-preview' : ''}`}
-                        onMouseDown={() => handleMouseDown(date.date)}
-                        onMouseEnter={() => handleMouseEnter(date.date)}
-                        onMouseUp={handleMouseUp}
-                        onClick={() => handleDateClick(date.date)}
+                        onMouseDown={(e) => handleStart(date.date, e)}
+                        onMouseEnter={(e) => handleMove(date.date, e)}
+                        onMouseUp={(e) => handleEnd(e)}
+                        onTouchStart={(e) => handleStart(date.date, e)}
+                        onTouchMove={(e) => {
+                          // 터치 포인트에서 해당하는 엘리먼트 찾기
+                          const touch = e.touches[0];
+                          const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                          if (element && element.closest('.date-cell')) {
+                            const cellElement = element.closest('.date-cell');
+                            const cellDate = cellElement.getAttribute('data-date');
+                            if (cellDate) {
+                              handleMove(cellDate, e);
+                            }
+                          }
+                        }}
+                        onTouchEnd={(e) => handleEnd(e)}
+                        onClick={(e) => handleDateClick(date.date, e)}
+                        data-date={date.date}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
                         <div className="date-number">{date.display}</div>
@@ -687,6 +760,7 @@ const ScheduleApp = () => {
           gap: 1px;
           background: #e0e6ff;
           user-select: none; /* 드래그 중 텍스트 선택 방지 */
+          touch-action: none; /* 모바일에서 스크롤 방지 */
         }
 
         .date-cell {
@@ -701,6 +775,7 @@ const ScheduleApp = () => {
           position: relative;
           background: white;
           min-height: 40px;
+          touch-action: none; /* 모바일 터치 최적화 */
         }
 
         .date-cell.other-month {
