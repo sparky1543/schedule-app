@@ -5,6 +5,10 @@ const ScheduleApp = () => {
   const [selectedSlots, setSelectedSlots] = useState(new Set());
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState(null);
+  const [dragEnd, setDragEnd] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   // 7월 1일부터 8월 31일까지의 날짜 생성 (일요일부터 시작하는 달력 형태)
   const generateDates = () => {
@@ -53,6 +57,140 @@ const ScheduleApp = () => {
 
   const { july: julyDates, august: augustDates } = generateDates();
 
+  // 유효한 날짜인지 확인 (7-8월 범위 내)
+  const isValidDate = (date) => {
+    const allValidDates = [...julyDates, ...augustDates]
+      .filter(d => d.isInRange)
+      .map(d => d.date);
+    return allValidDates.includes(date);
+  };
+
+  // 두 날짜 사이의 모든 날짜 배열 반환
+  const getDateRange = (startDate, endDate) => {
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // 시작과 끝 날짜 정렬
+      const actualStart = start <= end ? start : end;
+      const actualEnd = start <= end ? end : start;
+      
+      const dates = [];
+      const current = new Date(actualStart);
+      
+      while (current <= actualEnd) {
+        const dateStr = current.toISOString().split('T')[0];
+        if (isValidDate(dateStr)) {
+          dates.push(dateStr);
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      
+      return dates;
+    } catch (error) {
+      return [];
+    }
+  };
+
+  // 드래그 중 미리보기를 위한 함수
+  const isInDragRange = (date) => {
+    if (!isDragging || !dragStart || !dragEnd || !isValidDate(date)) return false;
+    try {
+      const rangeDates = getDateRange(dragStart, dragEnd);
+      return rangeDates.includes(date);
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // 드래그 시작
+  const handleMouseDown = (date) => {
+    if (!isValidDate(date)) return;
+    
+    setIsDragging(true);
+    setDragStart(date);
+    setDragEnd(date);
+  };
+
+  // 드래그 중
+  const handleMouseEnter = (date) => {
+    if (!isDragging || !isValidDate(date)) return;
+    setDragEnd(date);
+  };
+
+  // 드래그 끝
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+
+    if (dragStart && dragEnd) {
+      // 드래그 범위의 모든 날짜 선택
+      const rangeDates = getDateRange(dragStart, dragEnd);
+      const newSelectedSlots = new Set(selectedSlots);
+      
+      // 범위 내 첫 번째 날짜가 선택되어 있는지 확인하여 일괄 토글
+      const shouldSelect = !selectedSlots.has(dragStart);
+      
+      rangeDates.forEach(date => {
+        if (shouldSelect) {
+          newSelectedSlots.add(date);
+        } else {
+          newSelectedSlots.delete(date);
+        }
+      });
+      
+      setSelectedSlots(newSelectedSlots);
+    }
+    
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+  };
+
+  // 단일 날짜 클릭
+  const handleDateClick = (date) => {
+    if (!isValidDate(date) || isDragging) return;
+    
+    const newSelectedSlots = new Set(selectedSlots);
+    if (newSelectedSlots.has(date)) {
+      newSelectedSlots.delete(date);
+    } else {
+      newSelectedSlots.add(date);
+    }
+    setSelectedSlots(newSelectedSlots);
+  };
+
+  // 전역 마우스 업 이벤트 감지
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        handleMouseUp();
+      }
+    };
+
+    if (isDragging) {
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging]);
+
+  // 이름 입력 시 기존 일정 확인
+  useEffect(() => {
+    if (name.trim() && scheduleData[name.trim()]) {
+      setIsEditing(true);
+      // 기존 선택된 날짜들을 불러오기
+      const existingDates = scheduleData[name.trim()];
+      setSelectedSlots(new Set(existingDates));
+    } else {
+      setIsEditing(false);
+      if (!isDragging) { // 드래그 중이 아닐 때만 초기화
+        // setSelectedSlots(new Set()); // 기존 선택 유지
+      }
+    }
+  }, [name, scheduleData]);
+
   // 히트맵 데이터 계산
   const calculateHeatmapData = () => {
     const heatmapData = {};
@@ -76,22 +214,16 @@ const ScheduleApp = () => {
 
   const heatmapData = calculateHeatmapData();
 
-  // 날짜 클릭 처리
-  const toggleDate = (date) => {
-    const newSelectedSlots = new Set(selectedSlots);
-    
-    if (newSelectedSlots.has(date)) {
-      newSelectedSlots.delete(date);
-    } else {
-      newSelectedSlots.add(date);
-    }
-    
-    setSelectedSlots(newSelectedSlots);
-  };
-
   // 선택 초기화
   const clearSelection = () => {
     setSelectedSlots(new Set());
+  };
+
+  // 편집 취소
+  const cancelEdit = () => {
+    setName('');
+    setSelectedSlots(new Set());
+    setIsEditing(false);
   };
 
   // 일정 제출
@@ -112,23 +244,24 @@ const ScheduleApp = () => {
     const selectedDates = Array.from(selectedSlots);
 
     // 기존 데이터가 있는지 확인
-    const isExisting = scheduleData[name];
+    const isExisting = scheduleData[name.trim()];
     
     // 데이터 업데이트
     setScheduleData(prev => ({
       ...prev,
-      [name]: selectedDates
+      [name.trim()]: selectedDates
     }));
 
     // 초기화
     setName('');
     setSelectedSlots(new Set());
     setIsSubmitting(false);
+    setIsEditing(false);
     
     if (isExisting) {
-      alert(`${name}님의 일정이 수정되었습니다! ✏️`);
+      alert(`${name.trim()}님의 일정이 수정되었습니다! ✏️`);
     } else {
-      alert(`${name}님의 일정이 등록되었습니다! 🎉`);
+      alert(`${name.trim()}님의 일정이 등록되었습니다! 🎉`);
     }
   };
 
@@ -149,13 +282,19 @@ const ScheduleApp = () => {
           <h1>📅 일정 조율</h1>
           <div className="instructions">
             <p><strong>사용법:</strong></p>
-            <p>1. 이름 입력 → 2. 가능한 날짜 터치 → 3. 등록!</p>
-            <p>색이 진할수록 더 많은 사람이 가능해요 ✨</p>
-            <p>💡 <small>같은 이름으로 다시 등록하면 수정됩니다</small></p>
+            <p>1. 이름 입력 → 2. 날짜 클릭 또는 드래그 → 3. 등록!</p>
+            <p>💡 <small>같은 이름 입력시 기존 일정이 자동으로 불러와집니다</small></p>
           </div>
         </div>
 
         <div className="input-section">
+          {isEditing && (
+            <div className="edit-notice">
+              <span className="edit-icon">✏️</span>
+              <span className="edit-text">{name}님의 기존 일정을 수정 중입니다</span>
+            </div>
+          )}
+          
           <input
             type="text"
             value={name}
@@ -163,16 +302,22 @@ const ScheduleApp = () => {
             placeholder="이름을 입력하세요"
             className="name-input"
           />
+          
           <div className="button-group">
             <button onClick={clearSelection} className="clear-btn">
               🗑️ 선택 초기화
             </button>
+            {isEditing && (
+              <button onClick={cancelEdit} className="cancel-btn">
+                ❌ 편집 취소
+              </button>
+            )}
             <button 
               onClick={submitSchedule} 
               className="submit-btn"
               disabled={isSubmitting}
             >
-              {isSubmitting ? '등록 중...' : (scheduleData[name] ? '🔄 일정 수정' : '✅ 일정 등록')}
+              {isSubmitting ? '등록 중...' : (isEditing ? '🔄 일정 수정' : '✅ 일정 등록')}
             </button>
           </div>
         </div>
@@ -203,11 +348,15 @@ const ScheduleApp = () => {
                   {julyDates.map((date, index) => {
                     const count = date.isInRange ? (heatmapData[date.date] || 0) : 0;
                     const isSelected = date.isInRange && isDateSelected(date.date);
+                    const isInRange = isInDragRange(date.date);
                     return (
                       <div
                         key={index}
-                        className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''}`}
-                        onClick={() => date.isInRange && toggleDate(date.date)}
+                        className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'drag-preview' : ''}`}
+                        onMouseDown={() => handleMouseDown(date.date)}
+                        onMouseEnter={() => handleMouseEnter(date.date)}
+                        onMouseUp={handleMouseUp}
+                        onClick={() => handleDateClick(date.date)}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
                         <div className="date-number">{date.display}</div>
@@ -229,11 +378,15 @@ const ScheduleApp = () => {
                   {augustDates.map((date, index) => {
                     const count = date.isInRange ? (heatmapData[date.date] || 0) : 0;
                     const isSelected = date.isInRange && isDateSelected(date.date);
+                    const isInRange = isInDragRange(date.date);
                     return (
                       <div
                         key={index}
-                        className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''}`}
-                        onClick={() => date.isInRange && toggleDate(date.date)}
+                        className={`date-cell ${date.isCurrentMonth ? '' : 'other-month'} ${date.isInRange ? getHeatClass(count) : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'drag-preview' : ''}`}
+                        onMouseDown={() => handleMouseDown(date.date)}
+                        onMouseEnter={() => handleMouseEnter(date.date)}
+                        onMouseUp={handleMouseUp}
+                        onClick={() => handleDateClick(date.date)}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
                         <div className="date-number">{date.display}</div>
@@ -254,8 +407,17 @@ const ScheduleApp = () => {
               <p className="no-participants">아직 참가자가 없어요 🥲</p>
             ) : (
               Object.keys(scheduleData).map(participantName => (
-                <div key={participantName} className="participant-item">
+                <div 
+                  key={participantName} 
+                  className={`participant-item ${participantName === name.trim() ? 'editing' : ''}`}
+                  onClick={() => {
+                    setName(participantName);
+                    setIsEditing(true);
+                    setSelectedSlots(new Set(scheduleData[participantName]));
+                  }}
+                >
                   {participantName}
+                  {participantName === name.trim() && <span className="edit-indicator">✏️</span>}
                 </div>
               ))
             )}
@@ -332,6 +494,27 @@ const ScheduleApp = () => {
           border-bottom: 1px solid #e0e6ff;
         }
 
+        .edit-notice {
+          background: #fff3cd;
+          border: 1px solid #ffeaa7;
+          border-radius: 8px;
+          padding: 10px;
+          margin-bottom: 15px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .edit-icon {
+          font-size: 16px;
+        }
+
+        .edit-text {
+          font-size: 14px;
+          color: #856404;
+          font-weight: 500;
+        }
+
         .name-input {
           width: 100%;
           padding: 16px;
@@ -350,15 +533,17 @@ const ScheduleApp = () => {
 
         .button-group {
           display: flex;
-          gap: 10px;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
-        .clear-btn, .submit-btn {
+        .clear-btn, .cancel-btn, .submit-btn {
           flex: 1;
-          padding: 14px;
+          min-width: 100px;
+          padding: 12px;
           border: none;
           border-radius: 12px;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s;
@@ -371,6 +556,15 @@ const ScheduleApp = () => {
 
         .clear-btn:hover {
           background: #e8eaed;
+        }
+
+        .cancel-btn {
+          background: #fee;
+          color: #d93025;
+        }
+
+        .cancel-btn:hover {
+          background: #fdd;
         }
 
         .submit-btn {
@@ -492,12 +686,7 @@ const ScheduleApp = () => {
           grid-template-columns: repeat(7, 1fr);
           gap: 1px;
           background: #e0e6ff;
-        }
-
-        .dates-grid {
-          display: grid;
-          grid-template-columns: repeat(7, 1fr);
-          gap: 8px;
+          user-select: none; /* 드래그 중 텍스트 선택 방지 */
         }
 
         .date-cell {
@@ -541,16 +730,15 @@ const ScheduleApp = () => {
           font-weight: bold;
         }
 
+        .date-cell.drag-preview {
+          background: rgba(79, 172, 254, 0.3) !important;
+          border: 2px dashed #4facfe !important;
+        }
+
         .date-number {
           font-size: 14px;
           font-weight: 600;
           line-height: 1;
-        }
-
-        .day-text {
-          font-size: 10px;
-          opacity: 0.7;
-          margin-top: 2px;
         }
 
         .count {
@@ -608,6 +796,31 @@ const ScheduleApp = () => {
           border-radius: 20px;
           font-size: 12px;
           font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .participant-item:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(79, 172, 254, 0.3);
+        }
+
+        .participant-item.editing {
+          background: linear-gradient(135deg, #ffa726 0%, #ff9800 100%);
+          animation: pulse 2s infinite;
+        }
+
+        .edit-indicator {
+          font-size: 10px;
+        }
+
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.7; }
+          100% { opacity: 1; }
         }
 
         .no-participants {
