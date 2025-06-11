@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set } from 'firebase/database';
 
-// 🔥 여러분의 Firebase 설정을 여기에 넣으세요!
+// Firebase 설정
 const firebaseConfig = {
   apiKey: "AIzaSyAJR4DKer4gLCUsxEGk4guqhW8Biv3u5BY",
   authDomain: "schedule-app-d4a72.firebaseapp.com",
-  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/", // ⚠️ 이 부분을 추가해주세요!
+  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/",
   projectId: "schedule-app-d4a72",
   storageBucket: "schedule-app-d4a72.firebasestorage.app",
   messagingSenderId: "295551868282",
@@ -34,7 +34,7 @@ const ScheduleApp = () => {
   // 🔥 실시간 Firebase 리스너
   useEffect(() => {
     // 페이지 제목 설정
-    document.title = 'EEG 여름 휴가';
+    document.title = '📅 일정 조율';
     
     // 파비콘 설정
     const link = document.querySelector("link[rel~='icon']") || document.createElement('link');
@@ -249,25 +249,18 @@ const ScheduleApp = () => {
     setDragStartTime(null);
   };
 
-  // 웹 전용 클릭 핸들러 (백업)
+  // 웹 전용 클릭 핸들러 (독립적)
   const handleDateClick = (date, event) => {
     if (!isValidDate(date)) return;
     
-    // 터치 이벤트는 무시 (모바일에서는 handleEnd 사용)
-    if (event && (event.type === 'touchstart' || event.type === 'touchend')) {
-      return;
+    // 드래그 상태와 관계없이 독립적으로 처리
+    const newSelectedSlots = new Set(selectedSlots);
+    if (newSelectedSlots.has(date)) {
+      newSelectedSlots.delete(date);
+    } else {
+      newSelectedSlots.add(date);
     }
-    
-    // 드래그 중이 아닐 때만 실행
-    if (!isDragging) {
-      const newSelectedSlots = new Set(selectedSlots);
-      if (newSelectedSlots.has(date)) {
-        newSelectedSlots.delete(date);
-      } else {
-        newSelectedSlots.add(date);
-      }
-      setSelectedSlots(newSelectedSlots);
-    }
+    setSelectedSlots(newSelectedSlots);
   };
 
   // 전역 터치/마우스 업 이벤트 감지
@@ -540,7 +533,13 @@ const ScheduleApp = () => {
                           }
                         }}
                         onTouchEnd={(e) => handleEnd(e)}
-                        onClick={(e) => handleDateClick(date.date, e)}
+                        onClick={(e) => {
+                          // 웹 전용 클릭 (터치 디바이스가 아닐 때만)
+                          if (!('ontouchstart' in window)) {
+                            e.stopPropagation();
+                            handleDateClick(date.date, e);
+                          }
+                        }}
                         data-date={date.date}
                         style={{ cursor: date.isInRange ? 'pointer' : 'default' }}
                       >
