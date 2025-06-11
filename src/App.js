@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set } from 'firebase/database';
 
-// 🔥 여러분의 Firebase 설정을 여기에 넣으세요!
+// Firebase 설정
 const firebaseConfig = {
   apiKey: "AIzaSyAJR4DKer4gLCUsxEGk4guqhW8Biv3u5BY",
   authDomain: "schedule-app-d4a72.firebaseapp.com",
-  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/", // ⚠️ 이 부분을 추가해주세요!
+  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/",
   projectId: "schedule-app-d4a72",
   storageBucket: "schedule-app-d4a72.firebasestorage.app",
   messagingSenderId: "295551868282",
@@ -30,7 +30,7 @@ const ScheduleApp = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // 🔥 실시간 Firebase 리스너
+  // 실시간 Firebase 리스너
   useEffect(() => {
     const schedulesRef = ref(database, 'schedules');
     
@@ -58,7 +58,7 @@ const ScheduleApp = () => {
     };
   }, []);
 
-  // 🔥 Firebase에 즉시 저장
+  // Firebase에 즉시 저장
   const saveToFirebase = async (newData) => {
     try {
       const schedulesRef = ref(database, 'schedules');
@@ -885,7 +885,7 @@ const ScheduleApp = () => {
         }
 
         .date-cell.selected {
-          background: #9b59b6 !important;
+          background: #764ba2 !important;
           color: white;
           font-weight: bold;
         }
@@ -901,8 +901,8 @@ const ScheduleApp = () => {
         }
 
         .date-cell.drag-preview {
-          background: rgba(155, 89, 182, 0.3) !important;
-          border: 2px dashed #9b59b6 !important;
+          background: rgba(118, 75, 162, 0.3) !important;
+          border: 2px dashed #764ba2 !important;
         }
 
         .date-number {
