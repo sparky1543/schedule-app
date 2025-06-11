@@ -469,7 +469,7 @@ const ScheduleApp = () => {
     <div className="app-container">
       <div className="mobile-container">
         <div className="header">
-          <h1>📅 일정 조율</h1>
+          <h1>📅 여름 휴가 일정</h1>
           <div className="instructions">
             <p><strong>사용법:</strong></p>
             <p>1. 이름 입력 → 2. 날짜 클릭 또는 드래그 → 3. 등록!</p>
