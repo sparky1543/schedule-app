@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue, set } from 'firebase/database';
 
-// Firebase 설정
+// 🔥 여러분의 Firebase 설정을 여기에 넣으세요!
 const firebaseConfig = {
   apiKey: "AIzaSyAJR4DKer4gLCUsxEGk4guqhW8Biv3u5BY",
   authDomain: "schedule-app-d4a72.firebaseapp.com",
+  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/", // ⚠️ 이 부분을 추가해주세요!
   projectId: "schedule-app-d4a72",
   storageBucket: "schedule-app-d4a72.firebasestorage.app",
   messagingSenderId: "295551868282",
@@ -11,38 +14,9 @@ const firebaseConfig = {
   measurementId: "G-LSB019XWXB"
 };
 
-// Firebase SDK가 없을 때를 대비한 Mock 구현
-const createFirebaseMock = () => {
-  const data = { schedules: {} };
-  
-  return {
-    ref: (path) => ({
-      on: (event, callback) => {
-        // 초기 데이터 로드
-        setTimeout(() => callback({ val: () => data.schedules }), 100);
-        
-        // 5초마다 데이터 체크 (실제로는 실시간)
-        const interval = setInterval(() => {
-          const localData = localStorage.getItem('firebase-mock-data');
-          if (localData) {
-            data.schedules = JSON.parse(localData);
-            callback({ val: () => data.schedules });
-          }
-        }, 5000);
-        
-        return () => clearInterval(interval);
-      },
-      set: (newData) => {
-        data.schedules = newData;
-        localStorage.setItem('firebase-mock-data', JSON.stringify(newData));
-        return Promise.resolve();
-      }
-    })
-  };
-};
-
-// Firebase Mock (실제로는 firebase SDK 사용)
-const database = createFirebaseMock();
+// Firebase 초기화
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
 const ScheduleApp = () => {
   const [scheduleData, setScheduleData] = useState({});
@@ -54,18 +28,19 @@ const ScheduleApp = () => {
   const [dragEnd, setDragEnd] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Firebase에서 실시간 데이터 감지
+  // 🔥 실시간 Firebase 리스너
   useEffect(() => {
-    setIsLoading(true);
+    const schedulesRef = ref(database, 'schedules');
     
-    const schedulesRef = database.ref('schedules');
-    const unsubscribe = schedulesRef.on('value', (snapshot) => {
+    const unsubscribe = onValue(schedulesRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        setScheduleData(data);
-      }
+      setScheduleData(data || {});
+      setIsLoading(false);
+      console.log('Firebase에서 데이터 불러옴:', data);
+    }, (error) => {
+      console.error('Firebase 읽기 오류:', error);
       setIsLoading(false);
     });
 
@@ -77,21 +52,21 @@ const ScheduleApp = () => {
     window.addEventListener('offline', handleOffline);
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      unsubscribe();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
-  // Firebase에 데이터 저장
+  // 🔥 Firebase에 즉시 저장
   const saveToFirebase = async (newData) => {
     try {
-      const schedulesRef = database.ref('schedules');
-      await schedulesRef.set(newData);
+      const schedulesRef = ref(database, 'schedules');
+      await set(schedulesRef, newData);
+      console.log('Firebase 저장 성공!', newData);
     } catch (error) {
       console.error('Firebase 저장 실패:', error);
-      // 오프라인일 때는 로컬 스토리지에 저장
-      localStorage.setItem('firebase-offline-data', JSON.stringify(newData));
+      throw error;
     }
   };
 
@@ -394,10 +369,25 @@ const ScheduleApp = () => {
         <div className="mobile-container">
           <div className="loading-container">
             <div className="loading-spinner"></div>
-            <p>데이터를 불러오는 중...</p>
+            <p>Firebase에서 데이터를 불러오는 중...</p>
           </div>
         </div>
         <style jsx>{`
+          .app-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0;
+            font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+          }
+          .mobile-container {
+            width: 100%;
+            max-width: 430px;
+            min-height: 100vh;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            margin: 0 auto;
+          }
           .loading-container {
             display: flex;
             flex-direction: column;
@@ -431,7 +421,7 @@ const ScheduleApp = () => {
           <div className="instructions">
             <p><strong>사용법:</strong></p>
             <p>1. 이름 입력 → 2. 날짜 클릭 또는 드래그 → 3. 등록!</p>
-            <p>🔥 <small>실시간으로 모든 기기에서 동기화됩니다</small></p>
+            <p>💡 <small>같은 이름 입력시 기존 일정이 자동으로 불러와집니다</small></p>
           </div>
         </div>
 
@@ -600,15 +590,6 @@ const ScheduleApp = () => {
               ))
             )}
           </div>
-        </div>
-
-        <div className="sync-status">
-          <span className={`sync-icon ${isOnline ? 'online' : 'offline'}`}>
-            {isOnline ? '🔥' : '📴'}
-          </span>
-          <span className="sync-text">
-            {isOnline ? '실시간 동기화 중' : '오프라인 모드'}
-          </span>
         </div>
       </div>
 
@@ -786,7 +767,7 @@ const ScheduleApp = () => {
         .legend-items {
           display: flex;
           justify-content: space-between;
-          gap: 8px;
+          gap: 4px;
         }
 
         .legend-item {
@@ -904,7 +885,7 @@ const ScheduleApp = () => {
         }
 
         .date-cell.selected {
-          background: #4facfe !important;
+          background: #8e44ad !important;
           color: white;
           font-weight: bold;
         }
@@ -920,8 +901,8 @@ const ScheduleApp = () => {
         }
 
         .date-cell.drag-preview {
-          background: rgba(79, 172, 254, 0.3) !important;
-          border: 2px dashed #4facfe !important;
+          background: rgba(142, 68, 173, 0.3) !important;
+          border: 2px dashed #8e44ad !important;
         }
 
         .date-number {
@@ -1017,44 +998,6 @@ const ScheduleApp = () => {
           font-style: italic;
           text-align: center;
           margin: 20px 0;
-        }
-
-        .sync-status {
-          padding: 10px 20px;
-          background: #e8f5e8;
-          border-top: 1px solid #c8e6c9;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-
-        .sync-status.offline {
-          background: #fff3e0;
-          border-top-color: #ffcc02;
-        }
-
-        .sync-icon {
-          font-size: 14px;
-        }
-
-        .sync-icon.online {
-          animation: pulse 2s infinite;
-        }
-
-        .sync-icon.offline {
-          animation: none;
-        }
-
-        .sync-text {
-          font-size: 12px;
-          color: #2e7d32;
-          font-weight: 500;
-        }
-
-        @keyframes rotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
         }
 
         /* 스크롤바 스타일링 */
