@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set } from 'firebase/database';
 
-// Firebase 설정
+// 🔥 여러분의 Firebase 설정을 여기에 넣으세요!
 const firebaseConfig = {
   apiKey: "AIzaSyAJR4DKer4gLCUsxEGk4guqhW8Biv3u5BY",
   authDomain: "schedule-app-d4a72.firebaseapp.com",
-  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/",
+  databaseURL: "https://schedule-app-d4a72-default-rtdb.firebaseio.com/", // ⚠️ 이 부분을 추가해주세요!
   projectId: "schedule-app-d4a72",
   storageBucket: "schedule-app-d4a72.firebasestorage.app",
   messagingSenderId: "295551868282",
@@ -29,9 +29,20 @@ const ScheduleApp = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [dragStartTime, setDragStartTime] = useState(null);
 
   // 🔥 실시간 Firebase 리스너
   useEffect(() => {
+    // 페이지 제목 설정
+    document.title = 'EEG 여름 휴가';
+    
+    // 파비콘 설정
+    const link = document.querySelector("link[rel~='icon']") || document.createElement('link');
+    link.type = 'image/svg+xml';
+    link.rel = 'icon';
+    link.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>";
+    document.getElementsByTagName('head')[0].appendChild(link);
+    
     const schedulesRef = ref(database, 'schedules');
     
     const unsubscribe = onValue(schedulesRef, (snapshot) => {
@@ -167,7 +178,10 @@ const ScheduleApp = () => {
   const handleStart = (date, event) => {
     if (!isValidDate(date)) return;
     
-    // 기본 동작 방지 (스크롤, 선택 등)
+    const currentTime = Date.now();
+    setDragStartTime(currentTime);
+    
+    // 터치 이벤트만 preventDefault
     if (event && event.type === 'touchstart') {
       event.preventDefault();
     }
@@ -181,6 +195,7 @@ const ScheduleApp = () => {
   const handleMove = (date, event) => {
     if (!isDragging || !isValidDate(date)) return;
     
+    // 터치 이벤트만 preventDefault
     if (event && event.type === 'touchmove') {
       event.preventDefault();
     }
@@ -192,12 +207,17 @@ const ScheduleApp = () => {
   const handleEnd = (event) => {
     if (!isDragging) return;
 
+    const endTime = Date.now();
+    const timeDiff = endTime - (dragStartTime || 0);
+    const isQuickClick = timeDiff < 200; // 200ms 이하는 클릭으로 판단
+
+    // 터치 이벤트만 preventDefault
     if (event && event.type === 'touchend') {
       event.preventDefault();
     }
 
-    // 시작점과 끝점이 같으면 단일 클릭/탭으로 처리
-    if (dragStart === dragEnd) {
+    // 빠른 클릭이고 시작점과 끝점이 같으면 단일 클릭으로 처리
+    if (isQuickClick && dragStart === dragEnd) {
       const newSelectedSlots = new Set(selectedSlots);
       if (newSelectedSlots.has(dragStart)) {
         newSelectedSlots.delete(dragStart);
@@ -205,12 +225,11 @@ const ScheduleApp = () => {
         newSelectedSlots.add(dragStart);
       }
       setSelectedSlots(newSelectedSlots);
-    } else if (dragStart && dragEnd) {
-      // 드래그 범위의 모든 날짜 선택
+    } else if (dragStart && dragEnd && dragStart !== dragEnd) {
+      // 실제 드래그 (시작점과 끝점이 다름)
       const rangeDates = getDateRange(dragStart, dragEnd);
       const newSelectedSlots = new Set(selectedSlots);
       
-      // 범위 내 첫 번째 날짜가 선택되어 있는지 확인하여 일괄 토글
       const shouldSelect = !selectedSlots.has(dragStart);
       
       rangeDates.forEach(date => {
@@ -227,25 +246,28 @@ const ScheduleApp = () => {
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
+    setDragStartTime(null);
   };
 
-  // 단일 날짜 클릭/탭 (웹 전용 - 백업용)
+  // 웹 전용 클릭 핸들러 (백업)
   const handleDateClick = (date, event) => {
     if (!isValidDate(date)) return;
     
-    // 드래그가 진행 중이면 클릭 무시
-    if (isDragging) return;
-    
-    // 터치 이벤트는 무시 (handleEnd에서 처리)
-    if (event && event.type === 'touchstart') return;
-    
-    const newSelectedSlots = new Set(selectedSlots);
-    if (newSelectedSlots.has(date)) {
-      newSelectedSlots.delete(date);
-    } else {
-      newSelectedSlots.add(date);
+    // 터치 이벤트는 무시 (모바일에서는 handleEnd 사용)
+    if (event && (event.type === 'touchstart' || event.type === 'touchend')) {
+      return;
     }
-    setSelectedSlots(newSelectedSlots);
+    
+    // 드래그 중이 아닐 때만 실행
+    if (!isDragging) {
+      const newSelectedSlots = new Set(selectedSlots);
+      if (newSelectedSlots.has(date)) {
+        newSelectedSlots.delete(date);
+      } else {
+        newSelectedSlots.add(date);
+      }
+      setSelectedSlots(newSelectedSlots);
+    }
   };
 
   // 전역 터치/마우스 업 이벤트 감지
